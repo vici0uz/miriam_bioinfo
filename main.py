@@ -2,6 +2,7 @@ from pathlib import Path
 from io import StringIO
 import ast
 import os
+from re import S
 
 from Bio import Entrez
 from Bio import SeqIO
@@ -38,9 +39,13 @@ def download_data():
         for country in COUNTRYS:
             file_path = 'results/%s' % country
             Path(file_path).mkdir(parents=True, exist_ok=True)
-            search = Entrez.read(Entrez.esearch(db="protein", retmax=100, term="Dengue virus %s"%(country,), field="Organism"))["IdList"]
-            for res in search:
-                data_fetched = Entrez.efetch(db="protein", id=res, rettype="fasta", retmode="text").read()
+            search = Entrez.esearch(db='nucleotide', retmax=99999, term='Dengue virus %s' % (country))
+            
+            result = Entrez.read(Entrez.esearch(db="nucleotide", retmax=99999, term="Dengue virus %s"%(country,)))["IdList"]
+            print(len(result))
+
+            for res in result:
+                data_fetched = Entrez.efetch(db="nucleotide", id=res, rettype="fasta", retmode="text").read()
                 data_io = StringIO(data_fetched)
                 records = SeqIO.parse(data_io, 'fasta') 
                 for rec in records:
