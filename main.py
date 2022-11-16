@@ -34,15 +34,18 @@ COLS = [
 ]
 
 COUNTRYS = [
-    # "Mexico",
-    # "USA",
-    # "Venezuela",
-    # "Brazil",
-    # "Nicaragua",
-    "Peru",
-    "Puerto Rico",
-    "Colombia",
-    "Argentina",
+    "Cuba",
+    "Panama",
+    "Ecuador"
+    # # "Mexico",
+    # # "USA",
+    # # "Venezuela",
+    # # "Brazil",
+    # # "Nicaragua",
+    # "Peru",
+    # "Puerto Rico",
+    # "Colombia",
+    # "Argentina",
 ]
 
 GENOTYPE = {
@@ -74,7 +77,10 @@ def get_settings(): # 👌
             print("Could not read settings")
 
 def _get_year(data): # 👌
-    match = re.search(r'\b(?:2023|20[0-2][0-9]|19[70][0-9])\b', data) # Matchea con años YYYY entre 2023 y 1970
+    match = re.search(r'\b([12]\d{3})\b', data) #match con años entre 1000 y 2999 # TODO: Verificar que no sea un año negativo, matchear solo con 1970- fecha actual
+    # match = re.search(r'\b(?:2023|20[0-2][0-9]|19[70][0-9])\b', data) # Matchea con años YYYY entre 2023 y 1970
+    print(data)
+    print(match)
     if match:
         fecha = match[0]
         return fecha
@@ -345,6 +351,30 @@ def get_pubmed(genbank_record):
     else:
         return 
 
+def check_country(genbank_record, country):
+    data = get_features_values(genbank_record, 'source', 'country')
+    location_data = get_features_values(genbank_record, 'source', 'location')
+    res = ''
+    if data:
+        data = data.replace('"', '')
+        if data.find(':'):
+            target_str = data.split(':')
+            if (len(target_str)>=1):
+                res = target_str[0]
+        else:
+            res =  data
+    elif location_data:
+        data = data.replace('"', '')
+        if data.find(':'):
+            target_str = data.split(':')
+            if (len(target_str)>=1):
+                res = target_str[0]
+        else:
+            res =  data
+    if(res.lower() == country.lower()):
+        return True
+    return False
+
 def download_data(make_sheets=False):
     data = get_settings()
     if data:
@@ -369,17 +399,20 @@ def download_data(make_sheets=False):
                 records = SeqIO.parse(data_io, 'fasta')
                 genbank_record = GenBank.read(data_gb)
                 for rec in records:
-                    file_name = '%s/%s.fasta' % (file_path, rec.id)
-                    with open(file_name, 'w') as file:
-                        file.write(str(data_fetched))
-                        file.close()
-                        fasta_sequence = Fasta(file_name) # 👌
-                        if make_sheets:
-                            for fasta_record in fasta_sequence:
-                                record_id = rec.id
-                                data = process_record(record_id, fasta_record, genbank_record,)
-                                data['country'] = country
-                                list_data.append(data)
+                    if check_country(genbank_record, country):
+                        file_name = '%s/%s.fasta' % (file_path, rec.id)
+                        with open(file_name, 'w') as file:
+                            file.write(str(data_fetched))
+                            file.close()
+                            fasta_sequence = Fasta(file_name) # 👌
+                            if make_sheets:
+                                for fasta_record in fasta_sequence:
+                                    record_id = rec.id
+                                    data = process_record(record_id, fasta_record, genbank_record,)
+                                    data['country'] = country
+                                    # x = check_country(genbank_record,)
+                                    
+                                    list_data.append(data)
             make_sheet(list_data, country)
 # Lee la entrada del comando
 make_sheets = True  if (sys.argv[1] == 'make_sheets' and len(sys.argv)) > 1 else False
