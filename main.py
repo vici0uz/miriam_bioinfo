@@ -7,6 +7,7 @@ import re
 import os
 import pandas as pd
 import xlsxwriter
+import argparse
 
 from Bio import Entrez, Seq, SeqIO, SeqRecord, GenBank
 
@@ -34,13 +35,13 @@ COLS = [
 ]
 
 COUNTRYS = [
-    "Cuba",
-    "Panama",
-    "Ecuador"
+    # "Cuba",
+    # "Panama",
+    # "Ecuador"
     # # "Mexico",
     # # "USA",
     # # "Venezuela",
-    # # "Brazil",
+    "Brazil",
     # # "Nicaragua",
     # "Peru",
     # "Puerto Rico",
@@ -48,6 +49,10 @@ COUNTRYS = [
     # "Argentina",
 ]
 
+search_term = ''
+tax_id = 0
+db = ''
+organism= ''
 GENOTYPE = {
     '1': 'I',
     '2': 'II',
@@ -385,36 +390,76 @@ def download_data(make_sheets=False):
             file_path = 'results/%s' % country
             list_data = []
             Path(file_path).mkdir(parents=True, exist_ok=True)
-            search = Entrez.esearch(db='nucleotide', retmax=99999, term='(Dengue virus) AND %s) AND "Dengue virus"[porgn:__txid12637]' % (country,))
+            search = Entrez.esearch(db=f'{db}', retmax=99999, term=f'({search_term}) AND {country} AND "{organism}"[porgn:__txid{tax_id}] AND"{min_length}:{max_length}[Sequence Length])')
+            # search = Entrez.esearch(db='nucleotide', retmax=99999, term='(Dengue virus) AND %s) AND "Dengue virus"[porgn:__txid12637]' % (country,))
+            # search = Entrez.esearch(db='nucleotide', retmax=10, term='(Dengue virus) AND %s) AND "Dengue virus"[porgn:__txid12637]' % (country,))
+            # print(Entrez.read(search))
+           
             result = Entrez.read(search)["IdList"]
-            for index, res in enumerate(result):
-                # if index == 10: # CORTE DEBUG
-                #     break
-                data_fetched = Entrez.efetch(db="nucleotide", id=res, rettype="fasta", retmode="text").read()
-                data_summary_fetched = Entrez.efetch(db="nucleotide", id=res, rettype="gb", retmode="text").read()
+            print(len(result))
+            # for index, res in enumerate(result):
+            #     if index == 10: # CORTE DEBUG
+            #         break
+            #     data_fetched = Entrez.efetch(db=f"{db}", id=res, rettype="fasta", retmode="text").read()
+            #     data_summary_fetched = Entrez.efetch(db=f"{db}", id=res, rettype="gb", retmode="text").read()
                 
-                data_io = StringIO(data_fetched)
-                data_gb = StringIO(data_summary_fetched)
+            #     data_io = StringIO(data_fetched)
+            #     data_gb = StringIO(data_summary_fetched)
 
-                records = SeqIO.parse(data_io, 'fasta')
-                genbank_record = GenBank.read(data_gb)
-                for rec in records:
-                    if check_country(genbank_record, country):
-                        file_name = '%s/%s.fasta' % (file_path, rec.id)
-                        with open(file_name, 'w') as file:
-                            file.write(str(data_fetched))
-                            file.close()
-                            fasta_sequence = Fasta(file_name) # 👌
-                            if make_sheets:
-                                for fasta_record in fasta_sequence:
-                                    record_id = rec.id
-                                    data = process_record(record_id, fasta_record, genbank_record,)
-                                    data['country'] = country
-                                    # x = check_country(genbank_record,)
+            #     records = SeqIO.parse(data_io, 'fasta')
+            #     genbank_record = GenBank.read(data_gb)
+            #     for rec in records:
+            #         if check_country(genbank_record, country):
+            #             file_name = '%s/%s.fasta' % (file_path, rec.id)
+            #             with open(file_name, 'w') as file:
+            #                 file.write(str(data_fetched))
+            #                 file.close()
+            #                 fasta_sequence = Fasta(file_name) # 👌
+            #                 if make_sheets:
+            #                     for fasta_record in fasta_sequence:
+            #                         record_id = rec.id
+            #                         data = process_record(record_id, fasta_record, genbank_record,)
+            #                         data['country'] = country
+            #                         # x = check_country(genbank_record,)
                                     
-                                    list_data.append(data)
-            make_sheet(list_data, country)
+            #                         list_data.append(data)
+            # # make_sheet(list_data, country)
 # Lee la entrada del comando
-make_sheets = True  if (sys.argv[1] == 'make_sheets' and len(sys.argv)) > 1 else False
+
+# make_sheets = True  if (sys.argv[1] == 'make_sheets' and len(sys.argv)) > 1 else False
 # Invoca la función inicial
-download_data(make_sheets=make_sheets)
+# download_data(make_sheets=make_sheets)
+parser = argparse.ArgumentParser(description="Args")
+parser.add_argument('--sheet', type=bool, help="Export excel datasheet")
+parser.add_argument('--multi', type=bool, help="Export to multifasta")
+
+parser.add_argument('--tax_id', type=int, help="NCBI Taxonomical id")
+parser.add_argument('--db', type=str, help="Db search", default='nucleotide')
+parser.add_argument('--organism', type=str, help="Organism name")
+parser.add_argument('--search_term', type=str, help="Search term in example: Dengue virus")
+parser.add_argument('--min_length', type=int, help="Minimum length", default=100)
+parser.add_argument('--max_length', type=int, help='Maximum length', default=1000000000)
+args = parser.parse_args()
+# if args.sheet:
+#     download_data(make_sheets=True)
+
+if args.tax_id:
+    print(args.tax_id)
+    tax_id = args.tax_id
+else:
+    raise ValueError("Tax id required")
+
+if args.search_term:
+
+    print(args.search_term)
+else:
+    raise ValueError("Search term required")
+
+if args.organism:
+    organism = args.organism
+else:
+    raise ValueError("Organism required")
+db = args.db
+min_length = args.min_length
+max_length = args.max_length
+download_data(make_sheets=False)
