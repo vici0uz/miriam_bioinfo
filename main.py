@@ -34,25 +34,14 @@ COLS = [
     "ref_id"
 ]
 
-COUNTRYS = [
-    # "Cuba",
-    # "Panama",
-    # "Ecuador"
-    # # "Mexico",
-    # # "USA",
-    # # "Venezuela",
-    "Brazil",
-    # # "Nicaragua",
-    # "Peru",
-    # "Puerto Rico",
-    # "Colombia",
-    # "Argentina",
-]
-
 search_term = ''
 tax_id = 0
 db = ''
 organism= ''
+listado_paises = []
+exclude = ''
+sheet = False
+
 GENOTYPE = {
     '1': 'I',
     '2': 'II',
@@ -92,7 +81,7 @@ def _get_year(data): # 👌
     return False
 
 def _get_month(data):  # 👌
-    # matchea con los meses en Ingles
+    # matchea con los meses en Inglés
     match = re.search(r'(?:Jan(?:uary)?|Feb(?:uary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)', data, re.IGNORECASE)
     if match:
         return match.group(0)
@@ -159,12 +148,13 @@ def get_serotype(data): # 👌
 
 
 def _get_gene(data):
-    # match con todas las aparaciones de estas cadenas
-    match = re.findall(r'(envelope|partial|polyprotein|complete (?!cds))', data, flags=re.IGNORECASE)
+    # match con todas las apariciones de estas cadenas
+    match = re.findall(r'(envelope|partial|complete\sgenome|polyprotein)(?!cds)', data, flags=re.IGNORECASE)
+    print(match)
     if match:
         res = ''
         for m in match:
-            if m == 'complete':
+            if m == 'complete genome':
                 res += 'Complete genome'
                 break
             elif m == 'envelope':
@@ -182,6 +172,8 @@ def _get_gene(data):
                     elif p == 'partial':
                         res += ', partial'
                 break
+        
+        print(res)
         return res
     return False
 
@@ -381,68 +373,99 @@ def check_country(genbank_record, country):
     return False
 
 def download_data(make_sheets=False):
+    fasta_xd = ''
     data = get_settings()
     if data:
         Entrez.email = data['email']
         Entrez.api_key = data['api_key']
-
-        for country in COUNTRYS:
+        
+        Path('results').mkdir(parents=True, exist_ok=True)
+        with open('results/multi.fasta','w') as main_file:
+            main_file.write('')
+        for country in listado_paises:
             file_path = 'results/%s' % country
             list_data = []
             Path(file_path).mkdir(parents=True, exist_ok=True)
-            search = Entrez.esearch(db=f'{db}', retmax=99999, term=f'({search_term}) AND {country} AND "{organism}"[porgn:__txid{tax_id}] AND"{min_length}:{max_length}[Sequence Length])')
+
+            term = f'({search_term}) AND {country} AND "{organism}"[porgn:__txid{tax_id}] AND"{min_length}:{max_length}[Sequence Length])'
+            print(term)
+            if exclude:
+                term += f' NOT {exclude}'
+            search = Entrez.esearch(db=f'{db}', retmax=99999, term=term)
+
             # search = Entrez.esearch(db='nucleotide', retmax=99999, term='(Dengue virus) AND %s) AND "Dengue virus"[porgn:__txid12637]' % (country,))
             # search = Entrez.esearch(db='nucleotide', retmax=10, term='(Dengue virus) AND %s) AND "Dengue virus"[porgn:__txid12637]' % (country,))
             # print(Entrez.read(search))
            
             result = Entrez.read(search)["IdList"]
             print(len(result))
-            # for index, res in enumerate(result):
-            #     if index == 10: # CORTE DEBUG
-            #         break
-            #     data_fetched = Entrez.efetch(db=f"{db}", id=res, rettype="fasta", retmode="text").read()
-            #     data_summary_fetched = Entrez.efetch(db=f"{db}", id=res, rettype="gb", retmode="text").read()
+            for index, res in enumerate(result):
+                if index == 10: # CORTE DEBUG
+                    break
+                data_fetched = Entrez.efetch(db=f"{db}", id=res, rettype="fasta", retmode="text").read()
+                data_summary_fetched = Entrez.efetch(db=f"{db}", id=res, rettype="gb", retmode="text").read()
                 
-            #     data_io = StringIO(data_fetched)
-            #     data_gb = StringIO(data_summary_fetched)
+                data_io = StringIO(data_fetched)
+                data_gb = StringIO(data_summary_fetched)
 
-            #     records = SeqIO.parse(data_io, 'fasta')
-            #     genbank_record = GenBank.read(data_gb)
-            #     for rec in records:
-            #         if check_country(genbank_record, country):
-            #             file_name = '%s/%s.fasta' % (file_path, rec.id)
-            #             with open(file_name, 'w') as file:
-            #                 file.write(str(data_fetched))
-            #                 file.close()
-            #                 fasta_sequence = Fasta(file_name) # 👌
-            #                 if make_sheets:
-            #                     for fasta_record in fasta_sequence:
-            #                         record_id = rec.id
-            #                         data = process_record(record_id, fasta_record, genbank_record,)
-            #                         data['country'] = country
-            #                         # x = check_country(genbank_record,)
+                records = SeqIO.parse(data_io, 'fasta')
+                
+                try:
+                    genbank_record = GenBank.read(data_gb)
+                    for rec in records:
+                        if check_country(genbank_record, country):
+                            file_name = '%s/%s.fasta' % (file_path, rec.id)
+                            with open(file_name, 'w') as file:
+                                fasta_str = str(data_fetched)
+                                if fasta_str.find(country) != -1:
+                                    pass
+                                else:
+                                    fasta_lines = fasta_str.split('\n')
+                                    words = fasta_lines[0].split()
+                                    words.append(f'{country}')
+                                    fasta_lines[0] = ' '.join(words)
+                                    new_fasta_str = '\n'.join(fasta_lines)
+                                    fasta_str = new_fasta_str
+                                with open('results/multi.fasta','a') as main_file:
+                                    main_file.write(str(fasta_str))
                                     
-            #                         list_data.append(data)
-            # # make_sheet(list_data, country)
+                                file.write(str(data_fetched))
+                                file.close()
+                                fasta_sequence = Fasta(file_name) # 👌
+                                if sheet:
+                                    for fasta_record in fasta_sequence:
+                                        record_id = rec.id
+                                        data = process_record(record_id, fasta_record, genbank_record,)
+                                        data['country'] = country
+                                        # x = check_country(genbank_record,)
+                                        
+                                        list_data.append(data)
+                except:
+                    print('error')
+            if sheet:
+                print(list_data)
+                make_sheet(list_data, country)
+
 # Lee la entrada del comando
 
 # make_sheets = True  if (sys.argv[1] == 'make_sheets' and len(sys.argv)) > 1 else False
 # Invoca la función inicial
 # download_data(make_sheets=make_sheets)
 parser = argparse.ArgumentParser(description="Args")
-parser.add_argument('--sheet', type=bool, help="Export excel datasheet")
+parser.add_argument('--sheet', type=bool, help="Export excel datasheet (Only for dengue virus)")
 parser.add_argument('--multi', type=bool, help="Export to multifasta")
-
 parser.add_argument('--tax_id', type=int, help="NCBI Taxonomical id")
 parser.add_argument('--db', type=str, help="Db search", default='nucleotide')
 parser.add_argument('--organism', type=str, help="Organism name")
 parser.add_argument('--search_term', type=str, help="Search term in example: Dengue virus")
 parser.add_argument('--min_length', type=int, help="Minimum length", default=100)
 parser.add_argument('--max_length', type=int, help='Maximum length', default=1000000000)
+parser.add_argument('--country_list', type=str, help="A list of country")
+parser.add_argument('--exclude', type=str, help="Exclude word")
 args = parser.parse_args()
-# if args.sheet:
-#     download_data(make_sheets=True)
 
+if args.sheet:
+    sheet = True
 if args.tax_id:
     print(args.tax_id)
     tax_id = args.tax_id
@@ -450,7 +473,7 @@ else:
     raise ValueError("Tax id required")
 
 if args.search_term:
-
+    search_term = args.search_term
     print(args.search_term)
 else:
     raise ValueError("Search term required")
@@ -459,6 +482,17 @@ if args.organism:
     organism = args.organism
 else:
     raise ValueError("Organism required")
+
+if args.country_list:
+    print(type(args.country_list))
+    print(len(args.country_list))
+    print(args.country_list)
+    listado_paises = args.country_list.split(",")
+    print(listado_paises)
+    print(len(listado_paises))
+
+if args.exclude:
+    exclude = args.exclude
 db = args.db
 min_length = args.min_length
 max_length = args.max_length
