@@ -73,8 +73,6 @@ def get_settings(): # 👌
 def _get_year(data): # 👌
     match = re.search(r'\b([12]\d{3})\b', data) #match con años entre 1000 y 2999 # TODO: Verificar que no sea un año negativo, matchear solo con 1970- fecha actual
     # match = re.search(r'\b(?:2023|20[0-2][0-9]|19[70][0-9])\b', data) # Matchea con años YYYY entre 2023 y 1970
-    print(data)
-    print(match)
     if match:
         fecha = match[0]
         return fecha
@@ -150,7 +148,6 @@ def get_serotype(data): # 👌
 def _get_gene(data):
     # match con todas las apariciones de estas cadenas
     match = re.findall(r'(envelope|partial|complete\sgenome|polyprotein)(?!cds)', data, flags=re.IGNORECASE)
-    print(match)
     if match:
         res = ''
         for m in match:
@@ -172,8 +169,6 @@ def _get_gene(data):
                     elif p == 'partial':
                         res += ', partial'
                 break
-        
-        print(res)
         return res
     return False
 
@@ -286,7 +281,6 @@ def _get_source(genbank_record):
 def process_record(record_id, fasta_record, genbank_record):
     # print(genbank_record)
     fasta_data = fasta_record.long_name
-    print(fasta_data)
     res_date = get_date(fasta_record, genbank_record)
     serotype = get_serotype(fasta_data)
     genotype = get_genotype(genbank_record)
@@ -388,7 +382,6 @@ def download_data(make_sheets=False):
             Path(file_path).mkdir(parents=True, exist_ok=True)
 
             term = f'({search_term}) AND {country} AND "{organism}"[porgn:__txid{tax_id}] AND"{min_length}:{max_length}[Sequence Length])'
-            print(term)
             if exclude:
                 term += f' NOT {exclude}'
             search = Entrez.esearch(db=f'{db}', retmax=99999, term=term)
@@ -398,10 +391,10 @@ def download_data(make_sheets=False):
             # print(Entrez.read(search))
            
             result = Entrez.read(search)["IdList"]
-            print(len(result))
             for index, res in enumerate(result):
-                if index == 10: # CORTE DEBUG
-                    break
+                if test_mode is True:
+                    if index == 10: # CORTE DEBUG
+                        break
                 data_fetched = Entrez.efetch(db=f"{db}", id=res, rettype="fasta", retmode="text").read()
                 data_summary_fetched = Entrez.efetch(db=f"{db}", id=res, rettype="gb", retmode="text").read()
                 
@@ -443,7 +436,6 @@ def download_data(make_sheets=False):
                 except:
                     print('error')
             if sheet:
-                print(list_data)
                 make_sheet(list_data, country)
 
 # Lee la entrada del comando
@@ -462,19 +454,18 @@ parser.add_argument('--min_length', type=int, help="Minimum length", default=100
 parser.add_argument('--max_length', type=int, help='Maximum length', default=1000000000)
 parser.add_argument('--country_list', type=str, help="A list of country")
 parser.add_argument('--exclude', type=str, help="Exclude word")
+parser.add_argument('--test_mode', type=bool, help="Test mode (exit after 10 results)")
 args = parser.parse_args()
 
 if args.sheet:
     sheet = True
 if args.tax_id:
-    print(args.tax_id)
     tax_id = args.tax_id
 else:
     raise ValueError("Tax id required")
 
 if args.search_term:
     search_term = args.search_term
-    print(args.search_term)
 else:
     raise ValueError("Search term required")
 
@@ -483,13 +474,10 @@ if args.organism:
 else:
     raise ValueError("Organism required")
 
+test_mode = args.test_mode
+
 if args.country_list:
-    print(type(args.country_list))
-    print(len(args.country_list))
-    print(args.country_list)
     listado_paises = args.country_list.split(",")
-    print(listado_paises)
-    print(len(listado_paises))
 
 if args.exclude:
     exclude = args.exclude
